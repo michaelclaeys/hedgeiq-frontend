@@ -131,12 +131,12 @@ async function loadDashboardData() {
   }, 500);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/dashboard`);
+    const response = await fetch(API_BASE_URL + '/dashboard');
     
     clearTimeout(loadingTimeout);
 
     if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+      throw new Error('API returned ' + response.status);
     }
 
     const data = await response.json();
@@ -147,10 +147,10 @@ async function loadDashboardData() {
 
     if (elements.tierBadge) {
       elements.tierBadge.textContent = data.tier.toUpperCase();
-      elements.tierBadge.className = `tier-badge ${data.tier}`;
+      elements.tierBadge.className = 'tier-badge ' + data.tier;
     }
     if (elements.refreshRate) {
-      elements.refreshRate.textContent = `Updates every ${data.refresh_rate}`;
+      elements.refreshRate.textContent = 'Updates every ' + data.refresh_rate;
     }
 
     updateRegimeBanner(data);
@@ -197,9 +197,9 @@ function updateRegimeBanner(data) {
   const netGex = data.metrics.net_gex;
   const isPositiveGamma = netGex >= 0;
   
-  elements.regimeBanner.className = `regime-banner ${isPositiveGamma ? 'positive' : 'negative'}`;
+  elements.regimeBanner.className = 'regime-banner ' + (isPositiveGamma ? 'positive' : 'negative');
   elements.regimeValue.textContent = isPositiveGamma ? 'Positive Gamma' : 'Negative Gamma';
-  elements.regimeValue.className = `regime-value ${isPositiveGamma ? 'positive' : 'negative'}`;
+  elements.regimeValue.className = 'regime-value ' + (isPositiveGamma ? 'positive' : 'negative');
   elements.regimeDescription.textContent = isPositiveGamma 
     ? 'Dealers will buy dips and sell rips — expect mean reversion and lower volatility'
     : 'Dealers will amplify moves — expect trend continuation and higher volatility';
@@ -211,22 +211,21 @@ function updateMetrics(data) {
   
   const gexPositive = m.net_gex >= 0;
   elements.netGexValue.textContent = gexPositive ? 'Positive' : 'Negative';
-  elements.netGexValue.className = `metric-value ${gexPositive ? 'positive' : 'negative'}`;
+  elements.netGexValue.className = 'metric-value ' + (gexPositive ? 'positive' : 'negative');
   elements.netGexDesc.textContent = gexPositive ? 'Supportive environment' : 'Volatile environment';
 
   const vannaPositive = m.net_vanna >= 0;
   elements.netVannaValue.textContent = vannaPositive ? 'Positive' : 'Negative';
-  elements.netVannaValue.className = `metric-value ${vannaPositive ? 'positive' : 'negative'}`;
+  elements.netVannaValue.className = 'metric-value ' + (vannaPositive ? 'positive' : 'negative');
   elements.netVannaDesc.textContent = vannaPositive ? 'IV rise = bullish' : 'IV rise = bearish';
 
   const charmPositive = m.net_charm >= 0;
   elements.netCharmValue.textContent = charmPositive ? 'Positive' : 'Negative';
-  elements.netCharmValue.className = `metric-value ${charmPositive ? 'positive' : 'negative'}`;
+  elements.netCharmValue.className = 'metric-value ' + (charmPositive ? 'positive' : 'negative');
   elements.netCharmDesc.textContent = charmPositive ? 'Time decay bullish' : 'Time decay bearish';
 
-  // FIX: Actually show max pain value from backend
   if (elements.maxPainValue && m.max_pain) {
-    elements.maxPainValue.textContent = `$${m.max_pain.toLocaleString()}`;
+    elements.maxPainValue.textContent = '$' + m.max_pain.toLocaleString();
     elements.maxPainValue.className = 'metric-value neutral';
     elements.maxPainDesc.textContent = 'Price with max loss for option sellers';
   }
@@ -236,7 +235,7 @@ function updateLevelsTable(data) {
   const signals = data.signals;
   
   if (!signals || signals.length === 0) {
-    elements.levelsTableBody.innerHTML = `<div class="loading-row"><span>No signals found</span></div>`;
+    elements.levelsTableBody.innerHTML = '<div class="loading-row"><span>No signals found</span></div>';
     return;
   }
 
@@ -248,15 +247,13 @@ function updateLevelsTable(data) {
     const confluences = getConfluenceBadges(signal);
     const strengthHtml = getStrengthIndicator(signal.gex_score);
 
-    return `
-      <div class="level-row">
-        <span class="level-price">$${signal.strike.toLocaleString()}</span>
-        <span class="level-type ${typeClass}">${signal.type.toUpperCase()}</span>
-        <span class="level-confluence">${confluences}</span>
-        <span class="level-signal ${signalInfo.class}">${signalInfo.text}</span>
-        <span class="strength-indicator">${strengthHtml}</span>
-      </div>
-    `;
+    return '<div class="level-row">' +
+      '<span class="level-price">$' + signal.strike.toLocaleString() + '</span>' +
+      '<span class="level-type ' + typeClass + '">' + signal.type.toUpperCase() + '</span>' +
+      '<span class="level-confluence">' + confluences + '</span>' +
+      '<span class="level-signal ' + signalInfo.class + '">' + signalInfo.text + '</span>' +
+      '<span class="strength-indicator">' + strengthHtml + '</span>' +
+      '</div>';
   }).join('');
 
   elements.levelsTableBody.innerHTML = rows;
@@ -270,7 +267,7 @@ function getConfluenceBadges(signal) {
   if (signal.open_interest > 1000) badges.push('OI');
   if (signal.volume > 100) badges.push('Vol');
 
-  return badges.map(b => `<span class="conf-badge active">${b}</span>`).join('');
+  return badges.map(b => '<span class="conf-badge active">' + b + '</span>').join('');
 }
 
 function getSignalInfo(signal) {
@@ -309,23 +306,21 @@ function getStrengthIndicator(score) {
   for (let i = 0; i < maxDots; i++) {
     const filled = i < filledDots ? 'filled' : '';
     const high = filled && isHigh ? 'high' : '';
-    dots += `<div class="strength-dot ${filled} ${high}"></div>`;
+    dots += '<div class="strength-dot ' + filled + ' ' + high + '"></div>';
   }
   
   const labels = ['Low', 'Low', 'Medium', 'High', 'Very High'];
   const labelIndex = Math.min(Math.floor(score), 4);
   
-  return `
-    <div class="strength-bar">${dots}</div>
-    <span class="strength-label">${labels[labelIndex]}</span>
-  `;
+  return '<div class="strength-bar">' + dots + '</div>' +
+    '<span class="strength-label">' + labels[labelIndex] + '</span>';
 }
 
 function updateAdvancedTable(data) {
   const signals = data.signals;
   
   if (!signals || signals.length === 0) {
-    elements.advancedTableBody.innerHTML = `<div class="loading-row"><span>No data found</span></div>`;
+    elements.advancedTableBody.innerHTML = '<div class="loading-row"><span>No data found</span></div>';
     return;
   }
 
@@ -337,18 +332,16 @@ function updateAdvancedTable(data) {
     const vannaClass = signal.vanna >= 0 ? 'positive' : 'negative';
     const charmClass = signal.charm >= 0 ? 'positive' : 'negative';
 
-    return `
-      <div class="level-row advanced">
-        <span class="level-price">$${signal.strike.toLocaleString()}</span>
-        <span class="level-type ${typeClass}">${signal.type.toUpperCase()}</span>
-        <span class="data-cell ${gexClass}">${formatCompact(signal.gex)}</span>
-        <span class="data-cell ${vannaClass}">${formatCompact(signal.vanna)}</span>
-        <span class="data-cell ${charmClass}">${formatCompact(signal.charm)}</span>
-        <span class="data-cell neutral">${formatCompact(signal.open_interest)}</span>
-        <span class="data-cell neutral">${formatCompact(signal.volume)}</span>
-        <span class="data-cell neutral">${signal.gex_score.toFixed(1)}</span>
-      </div>
-    `;
+    return '<div class="level-row advanced">' +
+      '<span class="level-price">$' + signal.strike.toLocaleString() + '</span>' +
+      '<span class="level-type ' + typeClass + '">' + signal.type.toUpperCase() + '</span>' +
+      '<span class="data-cell ' + gexClass + '">' + formatCompact(signal.gex) + '</span>' +
+      '<span class="data-cell ' + vannaClass + '">' + formatCompact(signal.vanna) + '</span>' +
+      '<span class="data-cell ' + charmClass + '">' + formatCompact(signal.charm) + '</span>' +
+      '<span class="data-cell neutral">' + formatCompact(signal.open_interest) + '</span>' +
+      '<span class="data-cell neutral">' + formatCompact(signal.volume) + '</span>' +
+      '<span class="data-cell neutral">' + signal.gex_score.toFixed(1) + '</span>' +
+      '</div>';
   }).join('');
 
   elements.advancedTableBody.innerHTML = rows;
@@ -515,26 +508,26 @@ function drawPriceLabel(ctx, price, y, type, canvasWidth, padding) {
   ctx.font = '600 12px DM Sans';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`$${price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, x + labelWidth / 2, clampedY);
+  ctx.fillText('$' + price.toLocaleString(undefined, { maximumFractionDigits: 0 }), x + labelWidth / 2, clampedY);
 }
 
 function formatCompact(num) {
   const abs = Math.abs(num);
   const sign = num >= 0 ? '+' : '-';
   
-  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)}K`;
-  if (abs >= 1) return `${sign}${abs.toFixed(0)}`;
-  return `${sign}${abs.toFixed(2)}`;
+  if (abs >= 1e9) return sign + (abs / 1e9).toFixed(1) + 'B';
+  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return sign + (abs / 1e3).toFixed(1) + 'K';
+  if (abs >= 1) return sign + abs.toFixed(0);
+  return sign + abs.toFixed(2);
 }
 
 function updateLastUpdated(timestamp) {
   if (timestamp) {
     const date = new Date(timestamp);
-    elements.lastUpdated.textContent = `Updated ${date.toLocaleTimeString()}`;
+    elements.lastUpdated.textContent = 'Updated ' + date.toLocaleTimeString();
   } else {
-    elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    elements.lastUpdated.textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
 }
 
@@ -544,14 +537,14 @@ function startCountdown() {
     if (secondsUntilUpdate <= 0) {
       elements.nextUpdate.textContent = 'Updating...';
     } else {
-      elements.nextUpdate.textContent = `Next update in: ${secondsUntilUpdate}s`;
+      elements.nextUpdate.textContent = 'Next update in: ' + secondsUntilUpdate + 's';
     }
   }, 1000);
 }
 
 function resetCountdown() {
   secondsUntilUpdate = 60;
-  elements.nextUpdate.textContent = `Next update in: ${secondsUntilUpdate}s`;
+  elements.nextUpdate.textContent = 'Next update in: ' + secondsUntilUpdate + 's';
 }
 
 function showLoading(show) {
@@ -581,8 +574,3 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('resize', () => {
   if (dashboardData) updateChart(dashboardData);
 });
-```
-
-**Save this entire file to:**
-```
-C:\Users\micha\OneDrive\Desktop\hedgeiqsimple\hedgeiq-frontend\scripts\dashboard.js
