@@ -1,14 +1,5 @@
 /**
- * HedgeIQ Dashboard
- * All fixes implemented:
- * - Simplified metric displays (Positive/Negative instead of numbers)
- * - 1 minute updates with countdown
- * - Stronger levels shown first
- * - Better signal wording
- * - More forgiving dealer scores
- * - Charm included in confluence
- * - Market regime banner
- * - Fixed chart with attached price labels
+ * HedgeIQ Dashboard - Updated for Cached Backend
  */
 
 const API_BASE_URL = 'https://hedgeiq-backend.onrender.com/api';
@@ -21,7 +12,7 @@ let countdownTimer = null;
 let secondsUntilUpdate = 60;
 let isLoading = false;
 let isAdvancedMode = false;
-let levelsData = null;
+let dashboardData = null;
 let priceHistory = [];
 let isFirstLoad = true;
 
@@ -56,6 +47,9 @@ function cacheElements() {
   elements.netCharmDesc = document.getElementById('netCharmDesc');
   elements.maxPainValue = document.getElementById('maxPainValue');
   elements.maxPainDesc = document.getElementById('maxPainDesc');
+  // Tier info elements (if they exist)
+  elements.tierBadge = document.getElementById('tierBadge');
+  elements.refreshRate = document.getElementById('refreshRate');
 }
 
 async function init() {
@@ -103,23 +97,23 @@ function toggleAdvancedMode() {
   if (isAdvancedMode) {
     elements.simpleModeSection.style.display = 'none';
     elements.advancedModeSection.style.display = 'block';
-    if (levelsData) updateAdvancedTable(levelsData);
+    if (dashboardData) updateAdvancedTable(dashboardData);
   } else {
     elements.simpleModeSection.style.display = 'block';
     elements.advancedModeSection.style.display = 'none';
-    if (levelsData) updateLevelsTable(levelsData);
+    if (dashboardData) updateLevelsTable(dashboardData);
   }
 }
 
 function filterLevels(filter) {
-  if (!levelsData) return;
+  if (!dashboardData) return;
   
   const filteredData = {
-    ...levelsData,
-    key_levels: levelsData.key_levels.filter(level => {
+    ...dashboardData,
+    signals: dashboardData.signals.filter(level => {
       if (filter === 'all') return true;
-      if (filter === 'support') return level.level_type === 'SUPPORT';
-      if (filter === 'resistance') return level.level_type === 'RESISTANCE';
+      if (filter === 'support') return level.type === 'support';
+      if (filter === 'resistance') return level.type === 'resistance';
       return true;
     })
   };
@@ -142,40 +136,46 @@ async function loadDashboardData() {
   }
 
   try {
-    const [metricsRes, levelsRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/metrics?days_out=30`),
-      fetch(`${API_BASE_URL}/levels?days_out=30&top_n=15`)
-    ]);
+    // NEW: Call the cached /dashboard endpoint
+    const response = await fetch(`${API_BASE_URL}/dashboard`);
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    dashboardData = data;
 
     // Fetch price history in background (don't block)
     fetchPriceHistory();
 
-    if (!metricsRes.ok || !levelsRes.ok) {
-      throw new Error('Failed to fetch data');
+    // Update tier info if elements exist
+    if (elements.tierBadge) {
+      elements.tierBadge.textContent = data.tier.toUpperCase();
+      elements.tierBadge.className = `tier-badge ${data.tier}`;
+    }
+    if (elements.refreshRate) {
+      elements.refreshRate.textContent = `Updates every ${data.refresh_rate}`;
     }
 
-    const metrics = await metricsRes.json();
-    const levels = await levelsRes.json();
-    
-    levelsData = levels;
-
-    updateRegimeBanner(metrics);
-    updateMetrics(metrics);
+    updateRegimeBanner(data);
+    updateMetrics(data);
     
     if (isAdvancedMode) {
-      updateAdvancedTable(levels);
+      updateAdvancedTable(data);
     } else {
-      updateLevelsTable(levels);
+      updateLevelsTable(data);
     }
     
-    updateChart(levels);
-    updateLastUpdated();
+    updateChart(data);
+    updateLastUpdated(data.last_updated);
     
     isFirstLoad = false;
 
   } catch (error) {
     console.error('Error loading dashboard:', error);
-    showError('Failed to load data. Check that backend is running.');
+    showError('Failed to load data. Backend may be starting up (takes ~30 seconds on Render).');
   } finally {
     isLoading = false;
     showLoading(false);
@@ -191,7 +191,7 @@ async function fetchPriceHistory() {
     if (response.ok) {
       const data = await response.json();
       priceHistory = data.prices;
-      if (levelsData) updateChart(levelsData);
+      if (dashboardData) updateChart(dashboardData);
     }
   } catch (e) {
     console.warn('Could not fetch price history:', e);
@@ -199,8 +199,8 @@ async function fetchPriceHistory() {
 }
 
 function updateRegimeBanner(data) {
-  const m = data.metrics;
-  const isPositiveGamma = m.regime === 'POSITIVE_GAMMA';
+  const netGex = data.metrics.net_gex;
+  const isPositiveGamma = netGex >= 0;
   
   elements.regimeBanner.className = `regime-banner ${isPositiveGamma ? 'positive' : 'negative'}`;
   elements.regimeValue.textContent = isPositiveGamma ? 'Positive Gamma' : 'Negative Gamma';
@@ -232,34 +232,35 @@ function updateMetrics(data) {
   elements.netCharmValue.className = `metric-value ${charmPositive ? 'positive' : 'negative'}`;
   elements.netCharmDesc.textContent = charmPositive ? 'Time decay bullish' : 'Time decay bearish';
 
-  // Max Pain
-  elements.maxPainValue.textContent = `$${m.max_pain.toLocaleString()}`;
-  elements.maxPainValue.className = 'metric-value neutral';
-  const painDistance = ((m.max_pain - btcPrice) / btcPrice * 100).toFixed(1);
-  elements.maxPainDesc.textContent = `${painDistance > 0 ? '+' : ''}${painDistance}% from spot`;
+  // Max Pain - not in current response, use fallback
+  if (elements.maxPainValue) {
+    elements.maxPainValue.textContent = 'N/A';
+    elements.maxPainValue.className = 'metric-value neutral';
+    elements.maxPainDesc.textContent = 'Coming soon';
+  }
 }
 
 function updateLevelsTable(data) {
-  const levels = data.key_levels;
+  const signals = data.signals;
   
-  if (!levels || levels.length === 0) {
-    elements.levelsTableBody.innerHTML = `<div class="loading-row"><span>No levels found</span></div>`;
+  if (!signals || signals.length === 0) {
+    elements.levelsTableBody.innerHTML = `<div class="loading-row"><span>No signals found</span></div>`;
     return;
   }
 
-  // Sort by strength (dealer score) descending - strongest first
-  const sortedLevels = [...levels].sort((a, b) => b.gex_dealer_score - a.gex_dealer_score);
+  // Sort by strength (gex_score) descending - strongest first
+  const sortedSignals = [...signals].sort((a, b) => b.gex_score - a.gex_score);
 
-  const rows = sortedLevels.map(level => {
-    const typeClass = level.level_type.toLowerCase();
-    const signalInfo = getSignalInfo(level);
-    const confluences = getConfluenceBadges(level);
-    const strengthHtml = getStrengthIndicator(level.gex_dealer_score);
+  const rows = sortedSignals.map(signal => {
+    const typeClass = signal.type.toLowerCase();
+    const signalInfo = getSignalInfo(signal);
+    const confluences = getConfluenceBadges(signal);
+    const strengthHtml = getStrengthIndicator(signal.gex_score);
 
     return `
       <div class="level-row">
-        <span class="level-price">$${level.strike.toLocaleString()}</span>
-        <span class="level-type ${typeClass}">${level.level_type}</span>
+        <span class="level-price">$${signal.strike.toLocaleString()}</span>
+        <span class="level-type ${typeClass}">${signal.type.toUpperCase()}</span>
         <span class="level-confluence">${confluences}</span>
         <span class="level-signal ${signalInfo.class}">${signalInfo.text}</span>
         <span class="strength-indicator">${strengthHtml}</span>
@@ -270,38 +271,21 @@ function updateLevelsTable(data) {
   elements.levelsTableBody.innerHTML = rows;
 }
 
-function getConfluenceBadges(level) {
-  // Always include GEX since it's the primary metric
+function getConfluenceBadges(signal) {
   const badges = ['GEX'];
   
-  // Add Vanna if significant
-  if (Math.abs(level.vanna) > 100) {
-    badges.push('Vanna');
-  }
-  
-  // Add Charm if significant
-  if (Math.abs(level.charm) > 10) {
-    badges.push('Charm');
-  }
-  
-  // Add OI indicator if high open interest
-  if (level.open_interest > 1000) {
-    badges.push('OI');
-  }
-  
-  // Add Volume if there's recent activity
-  if (level.volume > 100) {
-    badges.push('Vol');
-  }
+  if (Math.abs(signal.vanna) > 100) badges.push('Vanna');
+  if (Math.abs(signal.charm) > 10) badges.push('Charm');
+  if (signal.open_interest > 1000) badges.push('OI');
+  if (signal.volume > 100) badges.push('Vol');
 
   return badges.map(b => `<span class="conf-badge active">${b}</span>`).join('');
 }
 
-function getSignalInfo(level) {
-  const score = level.gex_dealer_score;
-  const isSupport = level.level_type === 'SUPPORT';
+function getSignalInfo(signal) {
+  const score = signal.gex_score;
+  const isSupport = signal.type === 'support';
   
-  // More generous thresholds
   if (score >= 3) {
     return {
       class: isSupport ? 'strong-buy' : 'strong-sell',
@@ -326,9 +310,8 @@ function getSignalInfo(level) {
 }
 
 function getStrengthIndicator(score) {
-  // Convert score (0-4) to dots (1-5)
   const maxDots = 5;
-  const filledDots = Math.min(Math.ceil(score * 1.25), maxDots); // Scale 0-4 to 1-5
+  const filledDots = Math.min(Math.ceil(score * 1.25), maxDots);
   const isHigh = score >= 3;
   
   let dots = '';
@@ -348,32 +331,31 @@ function getStrengthIndicator(score) {
 }
 
 function updateAdvancedTable(data) {
-  const levels = data.key_levels;
+  const signals = data.signals;
   
-  if (!levels || levels.length === 0) {
+  if (!signals || signals.length === 0) {
     elements.advancedTableBody.innerHTML = `<div class="loading-row"><span>No data found</span></div>`;
     return;
   }
 
-  // Sort by absolute GEX value
-  const sortedLevels = [...levels].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex));
+  const sortedSignals = [...signals].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex));
 
-  const rows = sortedLevels.map(level => {
-    const typeClass = level.level_type.toLowerCase();
-    const gexClass = level.gex >= 0 ? 'positive' : 'negative';
-    const vannaClass = level.vanna >= 0 ? 'positive' : 'negative';
-    const charmClass = level.charm >= 0 ? 'positive' : 'negative';
+  const rows = sortedSignals.map(signal => {
+    const typeClass = signal.type.toLowerCase();
+    const gexClass = signal.gex >= 0 ? 'positive' : 'negative';
+    const vannaClass = signal.vanna >= 0 ? 'positive' : 'negative';
+    const charmClass = signal.charm >= 0 ? 'positive' : 'negative';
 
     return `
       <div class="level-row advanced">
-        <span class="level-price">$${level.strike.toLocaleString()}</span>
-        <span class="level-type ${typeClass}">${level.level_type}</span>
-        <span class="data-cell ${gexClass}">${formatCompact(level.gex)}</span>
-        <span class="data-cell ${vannaClass}">${formatCompact(level.vanna)}</span>
-        <span class="data-cell ${charmClass}">${formatCompact(level.charm)}</span>
-        <span class="data-cell neutral">${formatCompact(level.open_interest)}</span>
-        <span class="data-cell neutral">${formatCompact(level.volume)}</span>
-        <span class="data-cell neutral">${level.gex_dealer_score.toFixed(1)}</span>
+        <span class="level-price">$${signal.strike.toLocaleString()}</span>
+        <span class="level-type ${typeClass}">${signal.type.toUpperCase()}</span>
+        <span class="data-cell ${gexClass}">${formatCompact(signal.gex)}</span>
+        <span class="data-cell ${vannaClass}">${formatCompact(signal.vanna)}</span>
+        <span class="data-cell ${charmClass}">${formatCompact(signal.charm)}</span>
+        <span class="data-cell neutral">${formatCompact(signal.open_interest)}</span>
+        <span class="data-cell neutral">${formatCompact(signal.volume)}</span>
+        <span class="data-cell neutral">${signal.gex_score.toFixed(1)}</span>
       </div>
     `;
   }).join('');
@@ -398,21 +380,20 @@ function updateChart(data) {
   ctx.clearRect(0, 0, width, height);
 
   const btcPrice = data.btc_price;
-  const levels = data.key_levels;
+  const signals = data.signals;
 
   // Get prices
   let prices = priceHistory.length > 0 
     ? priceHistory.map(p => p[1])
     : Array(100).fill(btcPrice).map((p, i) => p + (Math.random() - 0.5) * p * 0.01);
 
-  // Get all key levels for price range
-  const resistanceLevels = levels.filter(l => l.level_type === 'RESISTANCE').slice(0, 3);
-  const supportLevels = levels.filter(l => l.level_type === 'SUPPORT').slice(0, 3);
+  // Get top 3 resistance and support levels
+  const resistanceLevels = signals.filter(s => s.type === 'resistance').slice(0, 3);
+  const supportLevels = signals.filter(s => s.type === 'support').slice(0, 3);
   
-  const allLevelPrices = [...resistanceLevels, ...supportLevels].map(l => l.strike);
+  const allLevelPrices = [...resistanceLevels, ...supportLevels].map(s => s.strike);
   const allPrices = [...prices, ...allLevelPrices, btcPrice];
   
-  // Calculate range with padding to show all levels
   const dataMin = Math.min(...allPrices);
   const dataMax = Math.max(...allPrices);
   const rangePadding = (dataMax - dataMin) * 0.1;
@@ -426,7 +407,7 @@ function updateChart(data) {
   const priceToY = (price) => padding.top + (1 - (price - minPrice) / priceRange) * chartHeight;
   const indexToX = (index) => padding.left + (index / (prices.length - 1)) * chartWidth;
 
-  // Draw grid lines
+  // Draw grid
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
@@ -440,12 +421,8 @@ function updateChart(data) {
   // Draw resistance zones
   resistanceLevels.forEach(level => {
     const y = priceToY(level.strike);
-    
-    // Zone background
     ctx.fillStyle = 'rgba(239, 68, 68, 0.08)';
     ctx.fillRect(padding.left, y - 12, chartWidth, 24);
-    
-    // Dashed line
     ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
@@ -453,18 +430,14 @@ function updateChart(data) {
     ctx.lineTo(width - padding.right, y);
     ctx.stroke();
     ctx.setLineDash([]);
-    
-    // Price label on right
     drawPriceLabel(ctx, level.strike, y, 'resistance', width, padding);
   });
 
   // Draw support zones
   supportLevels.forEach(level => {
     const y = priceToY(level.strike);
-    
     ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
     ctx.fillRect(padding.left, y - 12, chartWidth, 24);
-    
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
@@ -472,11 +445,10 @@ function updateChart(data) {
     ctx.lineTo(width - padding.right, y);
     ctx.stroke();
     ctx.setLineDash([]);
-    
     drawPriceLabel(ctx, level.strike, y, 'support', width, padding);
   });
 
-  // Draw price gradient fill
+  // Draw price gradient
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, 'rgba(0, 212, 255, 0.2)');
   gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
@@ -502,23 +474,20 @@ function updateChart(data) {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  // Draw current price dot and label (attached to line)
+  // Draw current price dot
   const lastX = indexToX(prices.length - 1);
   const lastY = priceToY(prices[prices.length - 1]);
   
-  // Pulsing outer ring
   ctx.beginPath();
   ctx.arc(lastX, lastY, 12, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(0, 212, 255, 0.2)';
   ctx.fill();
   
-  // Inner dot
   ctx.beginPath();
   ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
   ctx.fillStyle = '#00d4ff';
   ctx.fill();
 
-  // Current price label - attached to the dot
   drawPriceLabel(ctx, btcPrice, lastY, 'current', width, padding);
 }
 
@@ -527,10 +496,8 @@ function drawPriceLabel(ctx, price, y, type, canvasWidth, padding) {
   const labelWidth = 80;
   const labelHeight = 24;
   
-  // Clamp y to keep label visible
   const clampedY = Math.max(labelHeight / 2, Math.min(y, ctx.canvas.height - labelHeight / 2));
   
-  // Background
   let bgColor, textColor;
   if (type === 'resistance') {
     bgColor = 'rgba(239, 68, 68, 0.2)';
@@ -543,7 +510,6 @@ function drawPriceLabel(ctx, price, y, type, canvasWidth, padding) {
     textColor = '#00d4ff';
   }
   
-  // Draw connecting line for current price
   if (type === 'current') {
     ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
     ctx.lineWidth = 1;
@@ -553,18 +519,15 @@ function drawPriceLabel(ctx, price, y, type, canvasWidth, padding) {
     ctx.stroke();
   }
   
-  // Draw label background
   ctx.fillStyle = bgColor;
   ctx.beginPath();
   ctx.roundRect(x, clampedY - labelHeight / 2, labelWidth, labelHeight, 4);
   ctx.fill();
   
-  // Draw border
   ctx.strokeStyle = textColor;
   ctx.lineWidth = 1;
   ctx.stroke();
   
-  // Draw text
   ctx.fillStyle = textColor;
   ctx.font = '600 12px DM Sans';
   ctx.textAlign = 'center';
@@ -583,9 +546,13 @@ function formatCompact(num) {
   return `${sign}${abs.toFixed(2)}`;
 }
 
-function updateLastUpdated() {
-  const now = new Date();
-  elements.lastUpdated.textContent = `Updated ${now.toLocaleTimeString()}`;
+function updateLastUpdated(timestamp) {
+  if (timestamp) {
+    const date = new Date(timestamp);
+    elements.lastUpdated.textContent = `Updated ${date.toLocaleTimeString()}`;
+  } else {
+    elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
 }
 
 function startCountdown() {
@@ -629,5 +596,5 @@ window.addEventListener('beforeunload', () => {
 });
 
 window.addEventListener('resize', () => {
-  if (levelsData) updateChart(levelsData);
+  if (dashboardData) updateChart(dashboardData);
 });
