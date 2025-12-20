@@ -1,7 +1,42 @@
 /**
- * HedgeIQ Dashboard - Updated for Cached Backend
+ * HedgeIQ Dashboard - Updated for Cached Backend with Auth
  */
+// ========== AUTHENTICATION - ADD AT THE VERY TOP ==========
 
+let currentUser = null;
+let userTier = 'free';
+
+async function initAuth() {
+    const session = await requireAuth(); // Redirects if not logged in
+    if (!session) return;
+    
+    currentUser = await getCurrentUser();
+    userTier = getUserTier(currentUser);
+    
+    // Update user email display
+    const userEmailEl = document.getElementById('userEmail');
+    if (userEmailEl && currentUser) {
+        userEmailEl.textContent = currentUser.email;
+    }
+    
+    // Update tier badge
+    const tierBadgeEl = document.getElementById('tierBadge');
+    if (tierBadgeEl) {
+        tierBadgeEl.textContent = userTier.toUpperCase();
+    }
+    
+    // Update avatar with first letter of email
+    const userAvatarEl = document.getElementById('userAvatar');
+    if (userAvatarEl && currentUser) {
+        userAvatarEl.textContent = currentUser.email.charAt(0).toUpperCase();
+    }
+    
+    console.log('User authenticated:', currentUser.email, '| Tier:', userTier);
+}
+
+// ========== END AUTH CODE ==========
+
+// Your existing dashboard.js code continues below...
 const API_BASE_URL = 'https://hedgeiq-backend.onrender.com/api';
 const REFRESH_INTERVAL = 60 * 1000;
 
@@ -19,7 +54,10 @@ const elements = {};
 
 document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
-  init();
+  // Initialize auth THEN load dashboard
+  initAuth().then(() => {
+    init();
+  });
 });
 
 function cacheElements() {
@@ -131,7 +169,8 @@ async function loadDashboardData() {
   }, 500);
 
   try {
-    const response = await fetch(API_BASE_URL + '/dashboard');
+    // UPDATED: Use fetchWithAuth instead of fetch
+    const response = await fetchWithAuth(API_BASE_URL + '/dashboard');
     
     clearTimeout(loadingTimeout);
 
@@ -180,6 +219,7 @@ async function loadDashboardData() {
 
 async function fetchPriceHistory() {
   try {
+    // This is external API, keep as regular fetch
     const response = await fetch(
       'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1'
     );

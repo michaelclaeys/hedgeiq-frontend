@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles/dashboard.css">
+  
+  <!-- Supabase Auth - MUST load before auth.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <!-- Sidebar -->
@@ -57,11 +60,11 @@
       <div class="user-info">
         <div class="user-avatar" id="userAvatar">M</div>
         <div class="user-details">
-          <span class="user-name" id="userName">Michael</span>
-          <span class="user-plan" id="userPlan">Pro Plan</span>
+          <span class="user-name" id="userEmail">Loading...</span>
+          <span class="user-plan" id="tierBadge">FREE</span>
         </div>
       </div>
-      <button onclick="logout()" style="margin-top: 12px; width: 100%; padding: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+      <button onclick="signOut()" style="margin-top: 12px; width: 100%; padding: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
         Sign Out
       </button>
     </div>

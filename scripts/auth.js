@@ -1,61 +1,65 @@
-/**
- * Simple Auth System for HedgeIQ
- * Add this script to dashboard.html to protect it
- */
+// Supabase Auth Helper
+// Put this file in: scripts/auth.js
 
-// Check if user is logged in
-function checkAuth() {
-  const user = localStorage.getItem('hedgeiq_user');
-  
-  if (!user) {
-    // Not logged in - redirect to login
-    window.location.href = 'login.html';
-    return null;
-  }
+// ⚠️ REPLACE THESE WITH YOUR ACTUAL SUPABASE CREDENTIALS
+const SUPABASE_URL = 'https://bjjpfvlcwarloxigoytl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_rXjU4ZFIuQp8YCTFFCbfZg_GK3I2ToT';
 
-  try {
-    const userData = JSON.parse(user);
+// Initialize Supabase client
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Check if user is authenticated - use this to protect pages
+async function requireAuth() {
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!userData.loggedIn) {
-      // Not logged in - redirect to login
-      window.location.href = 'login.html';
-      return null;
+    if (!session) {
+        // Not logged in, redirect to login
+        window.location.href = 'login.html';
+        return null;
     }
-
-    return userData;
-  } catch (e) {
-    // Invalid user data - redirect to login
-    console.error('Invalid user data:', e);
-    window.location.href = 'login.html';
-    return null;
-  }
+    
+    return session;
 }
 
-// Logout function
-function logout() {
-  localStorage.removeItem('hedgeiq_user');
-  window.location.href = 'login.html';
+// Get current user data
+async function getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
 }
 
-// Get current user info
-function getCurrentUser() {
-  const user = localStorage.getItem('hedgeiq_user');
-  if (!user) return null;
-  
-  try {
-    return JSON.parse(user);
-  } catch (e) {
-    return null;
-  }
+// Get user's subscription tier
+function getUserTier(user) {
+    if (!user) return 'free';
+    return user.user_metadata?.tier || 'free';
 }
 
-// Run auth check immediately when page loads
-const currentUser = checkAuth();
+// Sign out
+async function signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (!error) {
+        window.location.href = 'login.html';
+    }
+}
 
-// Export functions for use in other scripts
-window.HedgeIQAuth = {
-  checkAuth,
-  logout,
-  getCurrentUser,
-  currentUser
-};
+// Fetch with authentication token
+async function fetchWithAuth(url, options = {}) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    
+    return fetch(url, {
+        ...options,
+        headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+}
+
+// Listen for auth changes
+supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+        // User logged out, redirect to login
+        window.location.href = 'login.html';
+    }
+});
