@@ -251,7 +251,9 @@
     <button class="toast-close">&times;</button>
   </div>
 
-  <!-- Auth must load FIRST to check login before anything else -->
+  <!-- Load Supabase library FIRST -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Auth must load SECOND to use Supabase -->
   <script src="./scripts/auth.js"></script>
   <script src="./scripts/dashboard.js"></script>
 </body>
