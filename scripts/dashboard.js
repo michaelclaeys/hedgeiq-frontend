@@ -116,6 +116,9 @@ async function init() {
 function setupEventListeners() {
   document.querySelectorAll('.asset-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if (e.target.dataset.asset === 'ETH') {
+        return; // onclick handler in HTML will show alert
+      }
       document.querySelectorAll('.asset-btn').forEach(b => b.classList.remove('active'));
       e.target.classList.add('active');
       currentAsset = e.target.dataset.asset;
